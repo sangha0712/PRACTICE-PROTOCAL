@@ -21,17 +21,17 @@ export const RuleCard: React.FC<InfoCardProps> = ({ title, description, icon: Ic
   };
 
   return (
-    <div className={`glass-panel p-6 rounded-lg transition-all duration-300 hover:-translate-y-1 border ${getBorderColor()} group tech-border relative overflow-hidden`}>
-      <div className={`absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity`}>
-        <Icon className="w-24 h-24" />
+    <div className={`glass-panel p-8 md:p-10 rounded-2xl transition-all duration-300 hover:-translate-y-2 border ${getBorderColor()} group tech-border relative overflow-hidden h-full flex flex-col justify-between`}>
+      <div className={`absolute top-0 right-0 p-6 opacity-5 group-hover:opacity-15 transition-opacity`}>
+        <Icon className="w-32 h-32" />
       </div>
       
       <div className="relative z-10">
-        <div className={`mb-4 ${getIconColor()}`}>
-          <Icon className="w-8 h-8" />
+        <div className={`mb-6 ${getIconColor()}`}>
+          <Icon className="w-10 h-10 md:w-12 md:h-12" />
         </div>
-        <h3 className="text-xl font-bold font-display mb-2 text-white">{title}</h3>
-        <p className="text-gray-400 leading-relaxed font-sans text-sm md:text-base">
+        <h3 className="text-2xl md:text-3xl font-bold font-display mb-4 text-white">{title}</h3>
+        <p className="text-gray-400 leading-relaxed font-sans text-base md:text-xl">
           {description}
         </p>
       </div>
