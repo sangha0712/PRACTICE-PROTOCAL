@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   Shield, 
   Users, 
@@ -14,10 +14,257 @@ import {
   ChevronRight,
   ChevronLeft,
   Siren,
-  HeartPulse
+  HeartPulse,
+  Volume2,
+  VolumeX,
+  Play
 } from 'lucide-react';
+import { GoogleGenAI } from "@google/genai";
 import { SectionHeader } from './components/SectionHeader';
 import { RuleCard } from './components/RuleCard';
+
+// --- Configuration ---
+
+const BRIEFING_SCRIPTS: Record<string, string[]> = {
+  intro: [
+    "ASH GUARD 전술 시뮬레이션에 오신 것을 환영합니다.",
+    "본 브리핑은 여러분이 숙지해야 할 생존 프로토콜의 핵심을 전달합니다.",
+    "생존이 걸린 문제이니, 집중해서 들어주시기 바랍니다."
+  ],
+  squad: [
+    "이번 훈련은 철저하게 2인 1조 팀 단위로 진행됩니다.",
+    "팀은 생체 데이터를 관리하는 전략 담당과, 전선을 책임지는 전투 담당으로 나뉩니다.",
+    "두 명 모두 전투에 참여할 수는 있습니다.",
+    "하지만 명심하십시오. 전략 담당이 빈사 상태에 빠지거나 전투 불능이 되면, 그 팀은 즉시 탈락 처리됩니다.",
+    "전투담당은 파트너를 보호하는 것을 최우선으로 합니다."
+  ],
+  env: [
+    "여러분이 투입될 작전 구역은 현재 보시는 훈련장의 4배 크기로 확장됩니다.",
+    "구역은 크게 세 가지 지형으로 나뉩니다.",
+    "체온 유지가 생존의 관건인 한랭 지역, 기습과 시가전이 빈번하게 일어나는 도심, 그리고 시야 확보가 극히 제한되는 숲입니다.",
+    "각 지형의 특성을 전략적으로 활용하는 팀만이 살아남을 수 있을 것입니다."
+  ],
+  rules: [
+    "훈련 제한 시간은 총 1시간 30분입니다.",
+    "이 시간 동안 생존하는 것 자체가 목표이며, 10분을 버틸 때마다 10포인트가 자동으로 지급됩니다.",
+    "단순히 숨어있는 것만이 능사는 아닙니다.",
+    "적극적인 교전을 통해 다른 팀을 탈락시킬 경우, 팀당 15점의 높은 가산점을 획득할 수 있습니다."
+  ],
+  support: [
+    "훈련 중 발생할 수 있는 치명적인 상황에 대비해, ASH GUARD의 개입 프로토콜이 준비되어 있습니다.",
+    "전투 불능 상태가 된 팀은 록쇼 요원이 즉각 현장에 투입되어 안전지대로 이송할 것입니다.",
+    "또한, 교전이 지나치게 과열되어 사망이나 중상에 준하는 위험이 감지될 경우.",
+    "감찰관 유아린이 직접 개입하여 전투를 강제로 중단시킬 수 있으니, 통제에 반드시 따라주십시오."
+  ],
+  outro: [
+    "이상으로 모든 작전 브리핑을 마칩니다.",
+    "시스템 준비가 완료되었습니다.",
+    "각 팀은 지정된 드롭 존으로 이동하여 훈련을 시작하십시오.",
+    "여러분의 무운을 빕니다."
+  ]
+};
+
+// --- Helpers ---
+
+const addWavHeader = (pcmData: Uint8Array, sampleRate: number, numChannels: number, bitDepth: number): ArrayBuffer => {
+  const headerLength = 44;
+  const dataLength = pcmData.length;
+  const buffer = new ArrayBuffer(headerLength + dataLength);
+  const view = new DataView(buffer);
+
+  const writeString = (view: DataView, offset: number, string: string) => {
+    for (let i = 0; i < string.length; i++) {
+      view.setUint8(offset + i, string.charCodeAt(i));
+    }
+  };
+
+  writeString(view, 0, 'RIFF');
+  view.setUint32(4, 36 + dataLength, true);
+  writeString(view, 8, 'WAVE');
+  writeString(view, 12, 'fmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, numChannels, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * numChannels * (bitDepth / 8), true);
+  view.setUint16(32, numChannels * (bitDepth / 8), true);
+  view.setUint16(34, bitDepth, true);
+  writeString(view, 36, 'data');
+  view.setUint32(40, dataLength, true);
+
+  const pcmView = new Uint8Array(buffer, headerLength);
+  pcmView.set(pcmData);
+
+  return buffer;
+};
+
+// --- Hooks ---
+
+const useBriefing = (sentences: string[], isStarted: boolean) => {
+  const [sentenceIndex, setSentenceIndex] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
+  
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const sourceNodeRef = useRef<AudioBufferSourceNode | null>(null);
+  const audioCache = useRef<Record<string, AudioBuffer>>({});
+  const fetchPromises = useRef<Record<string, Promise<AudioBuffer>>>({});
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
+
+  const stopAudio = useCallback(() => {
+    if (sourceNodeRef.current) {
+      try { sourceNodeRef.current.stop(); } catch (e) {}
+      sourceNodeRef.current = null;
+    }
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+    setIsPlaying(false);
+  }, []);
+
+  // Reset when slide changes
+  useEffect(() => {
+    stopAudio();
+    setSentenceIndex(0);
+  }, [sentences, stopAudio]);
+
+  const fetchAudioBuffer = useCallback((text: string): Promise<AudioBuffer> => {
+    if (audioCache.current[text]) return Promise.resolve(audioCache.current[text]);
+    if (fetchPromises.current[text]) return fetchPromises.current[text];
+
+    const promise = (async () => {
+      if (!audioContextRef.current) {
+        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+      }
+      if (audioContextRef.current.state === 'suspended') {
+        await audioContextRef.current.resume();
+      }
+
+      const response = await genAI.models.generateContent({
+        model: 'gemini-2.5-flash-preview-tts',
+        contents: [{ parts: [{ text }] }],
+        config: {
+          responseModalities: ['AUDIO'],
+          speechConfig: {
+            voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } }
+          }
+        }
+      });
+
+      const part = response.candidates?.[0]?.content?.parts?.[0];
+      const base64Audio = part?.inlineData?.data;
+      
+      if (!base64Audio) throw new Error("No audio data generated");
+
+      const binaryString = window.atob(base64Audio);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      
+      const wavBytes = addWavHeader(bytes, 24000, 1, 16);
+      const audioBuffer = await audioContextRef.current.decodeAudioData(wavBytes);
+      audioCache.current[text] = audioBuffer;
+      return audioBuffer;
+    })();
+
+    fetchPromises.current[text] = promise;
+    return promise;
+  }, []);
+
+  useEffect(() => {
+    if (!isStarted || isMuted || sentenceIndex >= sentences.length) return;
+
+    let isActive = true;
+
+    const play = async () => {
+      const text = sentences[sentenceIndex];
+      if (!text) return;
+
+      // Determine delay based on ending punctuation for natural Korean speech pacing
+      let delay = 750; // Default delay
+      if (text.endsWith('.')) {
+        delay = 800; // Full stop, slightly longer pause
+      } else if (text.endsWith('?')) {
+        delay = 900; // Question, longer pause for emphasis
+      } else if (text.endsWith('!')) {
+        delay = 600; // Exclamation, shorter pause to maintain energy
+      } else if (text.endsWith(',')) {
+        delay = 400; // Comma, short pause
+      } else if (text.endsWith('다.') || text.endsWith('니다.')) {
+        delay = 850; // Formal ending, standard pause
+      }
+
+      try {
+        setIsLoading(true);
+        const audioBuffer = await fetchAudioBuffer(text);
+        
+        // Preload the next sentence in the background
+        const nextText = sentences[sentenceIndex + 1];
+        if (nextText && !audioCache.current[nextText]) {
+          fetchAudioBuffer(nextText).catch(e => console.warn("Preload next sentence failed", e));
+        }
+
+        if (!isActive) return;
+
+        if (audioBuffer && audioContextRef.current) {
+          const source = audioContextRef.current.createBufferSource();
+          source.buffer = audioBuffer;
+          source.connect(audioContextRef.current.destination);
+          
+          source.onended = () => {
+            if (!isActive) return;
+            setIsPlaying(false);
+            timeoutRef.current = setTimeout(() => {
+              if (isActive) setSentenceIndex(prev => prev + 1);
+            }, delay);
+          };
+
+          sourceNodeRef.current = source;
+          source.start(0);
+          setIsPlaying(true);
+        }
+      } catch (error) {
+        console.error("TTS Error:", error);
+        if (!isActive) return;
+        // Skip to next sentence on error
+        timeoutRef.current = setTimeout(() => {
+          if (isActive) setSentenceIndex(prev => prev + 1);
+        }, delay);
+      } finally {
+        if (isActive) setIsLoading(false);
+      }
+    };
+
+    if (sentenceIndex === 0) {
+      // 0.85s delay before the first sentence on a page
+      timeoutRef.current = setTimeout(() => {
+        if (isActive) play();
+      }, 850);
+    } else {
+      play();
+    }
+
+    return () => {
+      isActive = false;
+      stopAudio();
+    };
+  }, [sentenceIndex, isStarted, isMuted, sentences, fetchAudioBuffer, stopAudio]);
+
+  const toggleMute = () => {
+    setIsMuted(prev => {
+      const next = !prev;
+      if (next) stopAudio();
+      return next;
+    });
+  };
+
+  return { isPlaying, isLoading, isMuted, toggleMute };
+};
 
 // --- Presentation Components ---
 
@@ -200,18 +447,50 @@ const SLIDES = [
 
 const App: React.FC = () => {
   const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
+  const [hasStarted, setHasStarted] = useState(false);
 
-  const next = (e?: React.MouseEvent) => { 
+  const next = useCallback((e?: React.MouseEvent) => { 
     if (e) e.stopPropagation();
     if (currentSlideIndex < SLIDES.length - 1) setCurrentSlideIndex(prev => prev + 1); 
-  };
-  const prev = (e?: React.MouseEvent) => { 
+  }, [currentSlideIndex]);
+
+  const prev = useCallback((e?: React.MouseEvent) => { 
     if (e) e.stopPropagation();
     if (currentSlideIndex > 0) setCurrentSlideIndex(prev => prev - 1); 
-  };
+  }, [currentSlideIndex]);
 
-  const CurrentSlideComponent = SLIDES[currentSlideIndex].component;
+  const currentSlide = SLIDES[currentSlideIndex];
+  const sentences = BRIEFING_SCRIPTS[currentSlide?.id] || [];
+  
+  const { isPlaying, isLoading, isMuted, toggleMute } = useBriefing(
+    sentences,
+    hasStarted
+  );
+
+  const CurrentSlideComponent = currentSlide?.component || (() => null);
   const progress = ((currentSlideIndex) / (SLIDES.length - 1)) * 100;
+
+  if (!hasStarted) {
+    return (
+      <div className="min-h-screen bg-ash-900 flex items-center justify-center relative overflow-hidden">
+        <div className="fixed inset-0 z-0 bg-[url('https://picsum.photos/1920/1080?grayscale&blur=2')] opacity-20 bg-cover bg-center"></div>
+        <div className="z-10 text-center">
+          <Shield className="w-20 h-20 text-neon-blue mx-auto mb-8 animate-pulse" />
+          <h1 className="text-5xl font-display font-bold text-white mb-4 tracking-widest">ASH GUARD</h1>
+          <p className="text-gray-400 font-mono mb-12">TACTICAL SIMULATION BRIEFING</p>
+          <button 
+            onClick={() => setHasStarted(true)}
+            className="group relative px-8 py-4 bg-neon-blue/10 border border-neon-blue text-neon-blue font-mono text-lg tracking-widest hover:bg-neon-blue hover:text-ash-900 transition-all duration-300"
+          >
+            <span className="flex items-center gap-3">
+              <Play className="w-5 h-5 fill-current" />
+              INITIALIZE SYSTEM
+            </span>
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen font-sans flex flex-col cursor-pointer overflow-hidden relative bg-ash-900" onClick={() => next()}>
@@ -228,6 +507,36 @@ const App: React.FC = () => {
         </div>
         
         <div className="flex items-center gap-4 pointer-events-auto">
+          {/* Audio Status Indicator */}
+          <div className="flex items-center gap-2 mr-4">
+            {isLoading && (
+              <div className="flex items-center gap-2 text-neon-blue animate-pulse">
+                <Activity className="w-4 h-4" />
+                <span className="text-[10px] font-mono">DECRYPTING...</span>
+              </div>
+            )}
+            {isPlaying && (
+              <div className="flex items-center gap-1 h-3">
+                {[...Array(5)].map((_, i) => (
+                  <div 
+                    key={i} 
+                    className="w-1 bg-neon-blue animate-pulse" 
+                    style={{ 
+                      height: `${Math.random() * 100}%`,
+                      animationDuration: `${0.5 + Math.random() * 0.5}s` 
+                    }}
+                  />
+                ))}
+              </div>
+            )}
+            <button 
+              onClick={(e) => { e.stopPropagation(); toggleMute(); }}
+              className="p-2 text-gray-400 hover:text-white transition-colors"
+            >
+              {isMuted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
+            </button>
+          </div>
+
           <div className="flex items-center gap-4 text-xs font-mono text-gray-500 bg-black/40 px-4 py-2 rounded-full border border-white/5 backdrop-blur-md">
             <span className="text-white/80">SECTOR {currentSlideIndex + 1} / {SLIDES.length}</span>
           </div>
