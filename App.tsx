@@ -112,7 +112,9 @@ const useBriefing = (sentences: string[], isStarted: boolean) => {
   const fetchPromises = useRef<Record<string, Promise<AudioBuffer>>>({});
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
+  // Initialize GenAI only if API key is available
+  const apiKey = import.meta.env.VITE_GEMINI_API_KEY || '';
+  const genAI = apiKey ? new GoogleGenAI({ apiKey }) : null;
 
   const stopAudio = useCallback(() => {
     if (sourceNodeRef.current) {
@@ -137,6 +139,10 @@ const useBriefing = (sentences: string[], isStarted: boolean) => {
     if (fetchPromises.current[text]) return fetchPromises.current[text];
 
     const promise = (async () => {
+      if (!genAI) {
+        throw new Error("Gemini API key not configured");
+      }
+
       if (!audioContextRef.current) {
         audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
       }
@@ -201,12 +207,47 @@ const useBriefing = (sentences: string[], isStarted: boolean) => {
 
       try {
         setIsLoading(true);
-        const audioBuffer = await fetchAudioBuffer(text);
+        let audioBuffer: AudioBuffer | null = null;
         
-        // Preload the next sentence in the background
-        const nextText = sentences[sentenceIndex + 1];
-        if (nextText && !audioCache.current[nextText]) {
-          fetchAudioBuffer(nextText).catch(e => console.warn("Preload next sentence failed", e));
+        try {
+          audioBuffer = await fetchAudioBuffer(text);
+          
+          // Preload the next sentence in the background
+          const nextText = sentences[sentenceIndex + 1];
+          if (nextText && !audioCache.current[nextText]) {
+            fetchAudioBuffer(nextText).catch(e => console.warn("Preload next sentence failed", e));
+          }
+        } catch (fetchError: any) {
+          console.warn("Gemini TTS failed, falling back to browser TTS:", fetchError);
+          // Fallback to browser SpeechSynthesis
+          if (!isActive) return;
+          
+          const utterance = new SpeechSynthesisUtterance(text);
+          utterance.lang = 'ko-KR';
+          utterance.rate = 1.0;
+          utterance.pitch = 1.0;
+          
+          utterance.onend = () => {
+            if (!isActive) return;
+            setIsPlaying(false);
+            timeoutRef.current = setTimeout(() => {
+              if (isActive) setSentenceIndex(prev => prev + 1);
+            }, delay);
+          };
+          
+          utterance.onerror = () => {
+             if (!isActive) return;
+             setIsPlaying(false);
+             timeoutRef.current = setTimeout(() => {
+               if (isActive) setSentenceIndex(prev => prev + 1);
+             }, delay);
+          };
+
+          window.speechSynthesis.cancel();
+          window.speechSynthesis.speak(utterance);
+          setIsPlaying(true);
+          setIsLoading(false);
+          return;
         }
 
         if (!isActive) return;
@@ -252,6 +293,7 @@ const useBriefing = (sentences: string[], isStarted: boolean) => {
     return () => {
       isActive = false;
       stopAudio();
+      window.speechSynthesis.cancel();
     };
   }, [sentenceIndex, isStarted, isMuted, sentences, fetchAudioBuffer, stopAudio]);
 
