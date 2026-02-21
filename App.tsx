@@ -113,7 +113,8 @@ const useBriefing = (sentences: string[], isStarted: boolean) => {
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Initialize GenAI only if API key is available
-  const apiKey = import.meta.env.VITE_GEMINI_API_KEY || '';
+  // Try both VITE_ prefix (for client-side) and standard process.env (for some build environments)
+  const apiKey = import.meta.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY || '';
   const genAI = apiKey ? new GoogleGenAI({ apiKey }) : null;
 
   const stopAudio = useCallback(() => {
@@ -207,47 +208,12 @@ const useBriefing = (sentences: string[], isStarted: boolean) => {
 
       try {
         setIsLoading(true);
-        let audioBuffer: AudioBuffer | null = null;
+        const audioBuffer = await fetchAudioBuffer(text);
         
-        try {
-          audioBuffer = await fetchAudioBuffer(text);
-          
-          // Preload the next sentence in the background
-          const nextText = sentences[sentenceIndex + 1];
-          if (nextText && !audioCache.current[nextText]) {
-            fetchAudioBuffer(nextText).catch(e => console.warn("Preload next sentence failed", e));
-          }
-        } catch (fetchError: any) {
-          console.warn("Gemini TTS failed, falling back to browser TTS:", fetchError);
-          // Fallback to browser SpeechSynthesis
-          if (!isActive) return;
-          
-          const utterance = new SpeechSynthesisUtterance(text);
-          utterance.lang = 'ko-KR';
-          utterance.rate = 1.0;
-          utterance.pitch = 1.0;
-          
-          utterance.onend = () => {
-            if (!isActive) return;
-            setIsPlaying(false);
-            timeoutRef.current = setTimeout(() => {
-              if (isActive) setSentenceIndex(prev => prev + 1);
-            }, delay);
-          };
-          
-          utterance.onerror = () => {
-             if (!isActive) return;
-             setIsPlaying(false);
-             timeoutRef.current = setTimeout(() => {
-               if (isActive) setSentenceIndex(prev => prev + 1);
-             }, delay);
-          };
-
-          window.speechSynthesis.cancel();
-          window.speechSynthesis.speak(utterance);
-          setIsPlaying(true);
-          setIsLoading(false);
-          return;
+        // Preload the next sentence in the background
+        const nextText = sentences[sentenceIndex + 1];
+        if (nextText && !audioCache.current[nextText]) {
+          fetchAudioBuffer(nextText).catch(e => console.warn("Preload next sentence failed", e));
         }
 
         if (!isActive) return;
@@ -272,7 +238,7 @@ const useBriefing = (sentences: string[], isStarted: boolean) => {
       } catch (error) {
         console.error("TTS Error:", error);
         if (!isActive) return;
-        // Skip to next sentence on error
+        // Skip to next sentence on error (Silent fallback)
         timeoutRef.current = setTimeout(() => {
           if (isActive) setSentenceIndex(prev => prev + 1);
         }, delay);
