@@ -39,13 +39,13 @@ const SlideIntro: React.FC = () => (
     <Reveal delay={0}>
       <div className="inline-flex items-center gap-2 px-4 py-1.5 border border-neon-blue/30 rounded-full bg-neon-blue/10 text-neon-blue text-xs md:text-sm font-mono mb-4 animate-pulse-slow">
         <Terminal className="w-3 h-3" />
-        <span>MISSION BRIEFING: TACTICAL SIMULATION</span>
+        <span>MISSION BRIEFING: ALL-GRADE TOURNAMENT</span>
       </div>
     </Reveal>
     <Reveal delay={200}>
       <h1 className="text-4xl md:text-6xl font-display font-bold text-white mb-4 leading-tight tracking-tight">
-        SURVIVAL <br />
-        <span className="text-transparent bg-clip-text bg-gradient-to-r from-neon-blue via-purple-500 to-neon-blue bg-300% animate-pulse-slow">PROTOCOL</span>
+        COMBAT <br />
+        <span className="text-transparent bg-clip-text bg-gradient-to-r from-neon-blue via-purple-500 to-neon-blue bg-300% animate-pulse-slow">TOURNAMENT</span>
       </h1>
     </Reveal>
     <Reveal delay={400}>
@@ -59,7 +59,7 @@ const SlideIntro: React.FC = () => (
 const SlideSquad: React.FC = () => (
   <div className="max-w-[1000px] mx-auto w-full px-4 md:px-6">
     <Reveal delay={0}>
-      <SectionHeader title="SQUAD COMPOSITION" icon={Users} />
+      <SectionHeader title="SQUAD COMPOSITION (2-MAN CELL)" icon={Users} />
     </Reveal>
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 mt-6">
       <Reveal delay={300}>
@@ -71,16 +71,12 @@ const SlideSquad: React.FC = () => (
             </div>
             <div>
               <h3 className="text-lg md:text-xl font-bold font-display text-white">전략 담당 (Command)</h3>
-              <p className="text-xs md:text-sm text-gray-500 font-mono mt-0.5">STRATEGIC ASSET</p>
+              <p className="text-xs md:text-sm text-gray-500 font-mono mt-0.5">NON-COMBATANT</p>
             </div>
           </div>
           <p className="text-gray-300 mb-4 text-sm md:text-base leading-relaxed flex-grow">
-            팀의 두뇌로서 생체 데이터를 관리하고 전략을 수립합니다. 전투가 가능하지만, 본연의 임무는 생존입니다.
+            직접 전투에 참여하지 않습니다. <strong>인이어(In-ear)</strong>를 통해 전장 상황을 분석하고 전투 담당에게 실시간 브리핑을 제공합니다.
           </p>
-          <div className="bg-red-500/10 border border-red-500/30 p-3 rounded-xl text-red-400 text-xs md:text-sm flex items-start gap-2">
-            <HeartPulse className="w-4 h-4 shrink-0 mt-0.5" />
-            <span><strong>패배 조건:</strong> 전략 담당이 빈사 또는 전투 불능 상태가 될 경우, 팀은 즉시 탈락합니다.</span>
-          </div>
         </div>
       </Reveal>
       <Reveal delay={600}>
@@ -92,11 +88,11 @@ const SlideSquad: React.FC = () => (
             </div>
             <div>
               <h3 className="text-lg md:text-xl font-bold font-display text-white">전투 담당 (Vanguard)</h3>
-              <p className="text-xs md:text-sm text-gray-500 font-mono mt-0.5">COMBAT ASSET</p>
+              <p className="text-xs md:text-sm text-gray-500 font-mono mt-0.5">SOLE COMBATANT</p>
             </div>
           </div>
           <p className="text-gray-300 text-sm md:text-base leading-relaxed flex-grow">
-            최전선에서 화력을 담당합니다. 적을 제압하는 것만큼이나, <strong>전략 담당 파트너를 호위하여 생존시키는 것</strong>이 최우선 목표입니다.
+            팀의 <strong>유일한 전투원</strong>입니다. 전략 담당의 오더를 수행하며 적을 제압하고 승리를 쟁취하십시오.
           </p>
         </div>
       </Reveal>
@@ -107,17 +103,17 @@ const SlideSquad: React.FC = () => (
 const SlideEnvironment: React.FC = () => (
   <div className="max-w-[1000px] mx-auto w-full px-4 md:px-6">
     <Reveal delay={0}>
-      <SectionHeader title="OPERATIONAL AREA (x4 EXPANSION)" icon={MapIcon} />
+      <SectionHeader title="OPERATIONAL AREA (x3 EXPANSION)" icon={MapIcon} />
     </Reveal>
     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
       {[
-        { name: '한랭 지역 (Frozen)', desc: '체온 유지 필수, 이동 속도 저하' },
-        { name: '도심 (Urban)', desc: '건물 간 근접 교전, 매복 주의' },
-        { name: '숲 (Forest)', desc: '은신 유리, 시야 확보 제한' }
+        { name: '한랭 지역 (Frozen)', desc: '체온 유지 필수, 이동 속도 저하', image: 'https://igx.kr/r/2M/26/33' },
+        { name: '도심 (Urban)', desc: '건물 간 근접 교전, 매복 주의', image: 'https://igx.kr/r/2M/26/30' },
+        { name: '숲 (Forest)', desc: '은신 유리, 시야 확보 제한', image: 'https://igx.kr/r/2M/26/31' }
       ].map((area, i) => (
         <Reveal key={area.name} delay={300 * (i + 1)}>
           <div className="group relative h-[240px] rounded-2xl overflow-hidden border border-white/10 glass-panel">
-            <img src={`https://picsum.photos/600/900?random=${i + 60}&grayscale`} className="absolute inset-0 w-full h-full object-cover opacity-40 transition-transform duration-700 group-hover:scale-110" alt={area.name} />
+            <img src={area.image} className="absolute inset-0 w-full h-full object-cover opacity-50 transition-transform duration-700 group-hover:scale-110" alt={area.name} referrerPolicy="no-referrer" />
             <div className="absolute inset-0 bg-gradient-to-t from-black via-ash-900/50 to-transparent"></div>
             <div className="absolute bottom-0 left-0 p-4 w-full">
               <h3 className="text-lg font-bold font-display text-white mb-1">{area.name}</h3>
@@ -131,7 +127,7 @@ const SlideEnvironment: React.FC = () => (
       <div className="mt-4 p-4 bg-neon-blue/5 border border-neon-blue/20 rounded-xl text-center">
         <p className="text-neon-blue text-sm font-mono">
           <Terminal className="w-4 h-4 inline-block mr-2 mb-0.5" />
-          작전 구역은 현재 훈련장 크기의 <strong>4배</strong>로 확장됩니다.
+          강당이 <strong>3배</strong>로 확장되며, 위 3가지 지형 중 <strong>하나가 무작위로 선정</strong>됩니다.
         </p>
       </div>
     </Reveal>
@@ -141,12 +137,12 @@ const SlideEnvironment: React.FC = () => (
 const SlideRules: React.FC = () => (
   <div className="max-w-[1000px] mx-auto w-full px-4 md:px-6">
     <Reveal delay={0}>
-      <SectionHeader title="SCORING PROTOCOLS" icon={Crosshair} />
+      <SectionHeader title="TOURNAMENT RULES" icon={Crosshair} />
     </Reveal>
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-6">
-      <Reveal delay={300}><RuleCard title="제한 시간 90분" description="1시간 30분 동안 생존하며 포인트를 획득하십시오." icon={Clock} /></Reveal>
-      <Reveal delay={600}><RuleCard title="생존 포인트 (+10)" description="10분 생존 시마다 10 포인트가 자동으로 지급됩니다." icon={Shield} variant="success" /></Reveal>
-      <Reveal delay={900}><RuleCard title="킬 포인트 (+15)" description="타 팀을 공격하여 탈락시킬 경우 팀당 15점의 가산점을 획득합니다." icon={Skull} variant="danger" /></Reveal>
+      <Reveal delay={300}><RuleCard title="제한 시간 40분" description="경기 시간은 40분으로 제한됩니다. 신속하게 결착을 지으십시오." icon={Clock} /></Reveal>
+      <Reveal delay={600}><RuleCard title="승리 조건" description="상대 팀의 전투 담당을 제압하여 전투 불능 상태로 만드십시오." icon={Swords} variant="success" /></Reveal>
+      <Reveal delay={900}><RuleCard title="무승부 시 탈락" description="40분 내에 승부가 나지 않을 경우, 양 팀 모두 즉시 탈락합니다." icon={Skull} variant="danger" /></Reveal>
     </div>
   </div>
 );
@@ -163,10 +159,10 @@ const SlideSupport: React.FC = () => (
           <div className="p-4 md:p-6 w-full">
              <div className="flex items-center gap-3 mb-2">
                 <Siren className="w-5 h-5 text-neon-green" />
-                <h3 className="text-lg md:text-xl font-bold text-white">록쇼 (Rockshow) - 긴급 이송</h3>
+                <h3 className="text-lg md:text-xl font-bold text-white">전투 불능자 이송</h3>
              </div>
             <p className="text-gray-300 text-sm md:text-base leading-relaxed font-light">
-              전투 불능이 확인된 팀은 즉시 <strong>ASH GUARD 소속 록쇼 요원</strong>에 의해 안전지대로 이송됩니다.
+              전투 불능이 확인된 인원은 즉시 <strong>ASH GUARD</strong>에 의해 안전지대로 이송됩니다.
             </p>
           </div>
         </div>
@@ -177,10 +173,10 @@ const SlideSupport: React.FC = () => (
           <div className="p-4 md:p-6 w-full">
             <div className="flex items-center gap-3 mb-2">
                 <AlertTriangle className="w-5 h-5 text-neon-purple" />
-                <h3 className="text-lg md:text-xl font-bold text-white">유아린 (Yoo Arin) - 교전 통제</h3>
+                <h3 className="text-lg md:text-xl font-bold text-white">위험 상황 제지</h3>
              </div>
             <p className="text-gray-300 text-sm md:text-base leading-relaxed font-light">
-              전투가 심하게 과열되어 <strong>사망이나 중상에 준하는 위험</strong>이 감지될 경우, <strong>ASH GUARD 소속 감찰관 유아린</strong>이 개입하여 전투가 잠시 중단될 수 있습니다.
+              경기 중 사망이나 중상에 준하는 위험이 감지될 경우, <strong>ASH GUARD</strong>가 개입하여 상황을 제지합니다.
             </p>
           </div>
         </div>
